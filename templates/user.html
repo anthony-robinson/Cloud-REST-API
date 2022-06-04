@@ -1,0 +1,18 @@
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename= 'css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200&display=swap" rel="stylesheet">
+</head>
+<body>
+    <h1>User</h1>
+    <p>This page displays the User information and JWT</p>
+    <p>Navigate to /boats to use the application</p>
+    <div>
+        <ul>
+            <li style="font-weight: bold; color: green;">Name: {{userName}}</li>
+            <li style="font-weight: bold;">ID: {{id}}</li>
+        </ul>
+        JWT: {{idToken}}
+    </div>
+</body>

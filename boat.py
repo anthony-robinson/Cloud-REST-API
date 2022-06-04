@@ -1,9 +1,11 @@
-from flask import Blueprint, request, Response
+from flask import Blueprint, request, Response, session
 from google.cloud import datastore
 import json2html
 import json
 import constants
-import string
+from google.oauth2 import id_token
+from google.auth.transport import requests as grequests
+import google_auth_oauthlib.flow 
 
 client = datastore.Client()
 boat_properties = ["name", "type", "length"]
@@ -49,11 +51,16 @@ def get_post_boats():
     elif request.method == 'POST':
         content = request.get_json()
         if not validate(content):
-            return (ERROR_400_INVALID, 400)
+            return (json.dumps(ERROR_400_INVALID), 400)
         myRequest = {}
+        new_boat = datastore.entity.Entity(key=client.key(constants.boat))
         for field in content:
+            new_boat.update({
+                field: content[field]
+            })
             myRequest[field] = content[field]
-        myRequest['id'] = '123'
+        client.put(new_boat)
+        myRequest['id'] = str(new_boat.key.id)
         return(myRequest, 201)
 
 # def get_post_boats():
