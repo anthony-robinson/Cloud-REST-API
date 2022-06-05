@@ -14,6 +14,7 @@ ERROR_406 = 'Error: Mimetype not supported by the server'
 ERROR_400_INVALID = 'Error: Invalid request - include name, type, length'
 ERROR_400_DUP = 'Error: Boat with this name already exists'
 ERROR_404 = 'Error: No boat with this boat_id exists'
+ERROR_403 = 'ERROR: You are not permitted to access this information, check JWT or login at /'
 
 CLIENT_ID = '268406931256-i8ctpko2kel510pn40riv3l89ccebhr3.apps.googleusercontent.com'
 
@@ -79,8 +80,12 @@ def get_post_boats():
             res = get_user_boats(id)
             return (json.dumps(res), 200)
         else:
-            return (json.dumps("ERROR: You are not permitted to access this information, check JWT or login at /"), 403)
+            return (json.dumps(ERROR_403), 403)
+    #only a user should be able to create boats -- protected endpoint
     elif request.method == 'POST':
+        id = validate_jwt()
+        if not id:
+            return(json.dumps(ERROR_403), 403)
         content = request.get_json()
         if not validate(content):
             return (json.dumps(ERROR_400_INVALID), 400)
@@ -91,6 +96,10 @@ def get_post_boats():
                 field: content[field]
             })
             myRequest[field] = content[field]
+        new_boat.update({
+            'owner': id
+        })
+        myRequest['owner'] = id
         client.put(new_boat)
         myRequest['id'] = str(new_boat.key.id)
         return(myRequest, 201)
