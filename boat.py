@@ -25,8 +25,6 @@ bp = Blueprint('boat', __name__, url_prefix='/boats')
 def validate_string(s):
     if len(s) < 1:
         return False
-    if len(s) > 20:
-        return False
     return True
 
 
@@ -118,36 +116,14 @@ def get_post_boats():
             })
             myRequest[field] = content[field]
         new_boat.update({
-            'owner': id
+            'owner': id,
+            'loads': []
         })
         myRequest['owner'] = id
+        myRequest['loads'] = []
         client.put(new_boat)
         myRequest['id'] = str(new_boat.key.id)
         return(myRequest, 201)
-
-# DELETE and PUT are added here to ensure 405 metho
-# @bp.route('', methods=['POST'])
-# def create_boat():
-#     if request.method == "POST":
-#         if request.is_json:
-#             content = request.get_json()
-#             if not validate(content):
-#                 return(ERROR_400_INVALID, 400)
-#             if not is_unique_name(content):
-#                 return(ERROR_400_DUP, 400)
-#             new_boat = datastore.entity.Entity(key=client.key(constants.boat))
-#             myRequest = {}
-#             for field in content:
-#                 new_boat.update({
-#                     field: content[field]
-#                 })
-#                 myRequest[field] = content[field]
-#             client.put(new_boat)
-#             myRequest['id'] = str(new_boat.key.id)
-#             return(myRequest, 201)
-#         else:
-#             return (ERROR_406, 406)
-
 
 @bp.route('/<boat_id>', methods=['DELETE', 'PATCH', 'PUT'])
 def edit_delete_boat(boat_id):
