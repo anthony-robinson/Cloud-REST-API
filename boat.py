@@ -15,6 +15,8 @@ ERROR_400_INVALID = 'Error: Invalid request - include name, type, length'
 ERROR_400_DUP = 'Error: Boat with this name already exists'
 ERROR_404 = 'Error: No boat with this boat_id exists'
 
+CLIENT_ID = '268406931256-i8ctpko2kel510pn40riv3l89ccebhr3.apps.googleusercontent.com'
+
 bp = Blueprint('boat', __name__, url_prefix='/boats')
 
 def validate_string(s):
@@ -41,13 +43,43 @@ def is_unique_name(content):
             return False
     return True
 
+def validate_jwt():
+    bearer = request.headers.get('Authorization')
+    if bearer: 
+        token = bearer.split()[1]
+    else:
+        return False
+    try:
+        idinfo = id_token.verify_oauth2_token(token, grequests.Request(), CLIENT_ID)
+        userid = idinfo['sub']
+        return userid
+    except ValueError:
+        return False
+
+    
+
+def get_user_boats(id):
+    query = client.query(kind=constants.boat)
+    results = list(query.fetch())
+    res = []
+    for boat in results:
+        if 'owner' in boat and boat['owner'] == id:
+            res.append(boat)
+    return res
+
 def is_boat_property(prop):
     return prop in boat_properties
 
+#/boats is protected endpoint should only show users boats
 @bp.route('', methods=['GET', 'POST'])
 def get_post_boats():
     if request.method == 'GET':
-        return ('', 200)
+        id = validate_jwt()
+        if id:
+            res = get_user_boats(id)
+            return (json.dumps(res), 200)
+        else:
+            return (json.dumps("ERROR: You are not permitted to access this information, check JWT or login at /"), 403)
     elif request.method == 'POST':
         content = request.get_json()
         if not validate(content):
