@@ -10,11 +10,13 @@ import google_auth_oauthlib.flow
 client = datastore.Client()
 boat_properties = ["name", "type", "length"]
 APP_JSON = 'application/json'
-ERROR_406 = 'Error: Mimetype not supported by the server'
+ERROR_406 = 'ERROR 406: Mimetype not supported by the server'
 ERROR_400_INVALID = 'Error: Invalid request - include name, type, length'
-ERROR_400_DUP = 'Error: Boat with this name already exists'
-ERROR_404 = 'Error: No boat with this boat_id exists'
-ERROR_403 = 'ERROR: You are not permitted to access this information, check JWT or login at /'
+ERROR_400_DUP = 'ERROR 400: Boat with this name already exists'
+ERROR_401 = 'ERROR 401: The client has provided either no or invalid credentials. Check your JWT and login at /'
+ERROR_404 = 'ERROR 404: No boat with this boat_id exists'
+ERROR_403 = 'ERROR 403: You are not permitted to perform this action'
+
 
 CLIENT_ID = '268406931256-i8ctpko2kel510pn40riv3l89ccebhr3.apps.googleusercontent.com'
 
@@ -57,6 +59,12 @@ def validate_jwt():
     except ValueError:
         return False
 
+# function to check if boat's owner and id match else 403 error
+def validate_boat_owner(boat, id):
+    if boat is not None and boat['owner'] != id:
+        return False
+    return True
+
     
 
 def get_user_boats(owner_id, request):
@@ -93,12 +101,12 @@ def get_post_boats():
             res = get_user_boats(id, request)
             return (json.dumps(res, indent = 4), 200)
         else:
-            return (json.dumps(ERROR_403), 403)
+            return (json.dumps(ERROR_401), 401)
     #only a user should be able to create boats -- protected endpoint
     elif request.method == 'POST':
         id = validate_jwt()
         if not id:
-            return(json.dumps(ERROR_403), 403)
+            return(json.dumps(ERROR_401), 401)
         content = request.get_json()
         if not validate(content):
             return (json.dumps(ERROR_400_INVALID), 400)
@@ -140,15 +148,22 @@ def get_post_boats():
 #         else:
 #             return (ERROR_406, 406)
 
+
 @bp.route('/<boat_id>', methods=['DELETE', 'PATCH', 'PUT'])
 def edit_delete_boat(boat_id):
+    # DELETE /:boat_id is a protected endpoint -- only user can delete a boat
     if request.method == 'DELETE':
+        id = validate_jwt()
+        if not id:
+            return(json.dumps(ERROR_401), 401)
         boat_key = client.key(constants.boat, int(boat_id))
         boat = client.get(key=boat_key)
+        if boat is not None and boat['owner'] != id:
+            return(json.dumps(ERROR_403), 403)
         if boat is not None:
             client.delete(boat_key)
             return ('',204)
-        return ('Error: No boat with this boat_id exists', 404)
+        return (json.dumps(ERROR_404), 404)
     elif request.method == 'PATCH':
         if request.is_json:
             content = request.get_json()
@@ -218,9 +233,11 @@ def edit_delete_boat(boat_id):
 def get_boat(boat_id):
     id = validate_jwt()
     if not id:
-        return(json.dumps(ERROR_403), 403)
+        return(json.dumps(ERROR_401), 401)
     boat_key = client.key(constants.boat, int(boat_id))
     boat = client.get(key=boat_key)
+    if not validate_boat_owner(boat, id):
+        return(json.dumps(ERROR_403), 403)
     if boat is not None:
         return(json.dumps(boat), 200)
     return (ERROR_404, 404)
