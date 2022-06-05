@@ -59,14 +59,26 @@ def validate_jwt():
 
     
 
-def get_user_boats(id):
+def get_user_boats(owner_id, request):
     query = client.query(kind=constants.boat)
-    results = list(query.fetch())
-    res = []
+
+    qlimit = int(request.args.get('limit', '5'))
+    qoffset = int(request.args.get('offset', '0'))
+    query.add_filter("owner", "=", owner_id)
+    boat_iterator = query.fetch(limit=qlimit, offset=qoffset)
+    pages = boat_iterator.pages
+    next_url = None
+    results = list(next(pages))
+    if boat_iterator.next_page_token:
+        next_offset = qoffset + qlimit
+        next_url = request.base_url + "?limit=" + str(qlimit) + "&offset=" + str(next_offset)
+
     for boat in results:
-        if 'owner' in boat and boat['owner'] == id:
-            res.append(boat)
-    return res
+        boat['id'] = boat.key.id
+    output = {"boats": results}
+    if next_url:
+        output['next'] = next_url
+    return output
 
 def is_boat_property(prop):
     return prop in boat_properties
@@ -77,8 +89,8 @@ def get_post_boats():
     if request.method == 'GET':
         id = validate_jwt()
         if id:
-            res = get_user_boats(id)
-            return (json.dumps(res), 200)
+            res = get_user_boats(id, request)
+            return (json.dumps(res, indent = 4), 200)
         else:
             return (json.dumps(ERROR_403), 403)
     #only a user should be able to create boats -- protected endpoint

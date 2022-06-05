@@ -100,6 +100,8 @@ def user_page():
         idinfo = id_token.verify_oauth2_token(token, grequests.Request(), CLIENT_ID)
         username = 'N/A'
         userid = idinfo['sub']
+        if 'name' in idinfo:
+            username = idinfo['name']
 
         #first query the datastore to check if user is already in
         # don't add to the datastore, just return
