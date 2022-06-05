@@ -166,21 +166,16 @@ def edit_delete_boat(boat_id):
         return (json.dumps(ERROR_404), 404)
     elif request.method == 'PATCH':
         if request.is_json:
+            id = validate_jwt()
+            if not id:
+                return(json.dumps(ERROR_401), 401)
             content = request.get_json()
-            if 'name' in content:
-                if not is_unique_name(content):
-                    return (ERROR_400_DUP, 400)
-                if not validate_string(content['name']):
-                    return (ERROR_400_INVALID, 400)
-            if "type" in content:
-                if not validate_string(content["type"]):
-                    return(ERROR_400_INVALID, 400)
-            if "id" in content:
-                return (ERROR_400_INVALID, 400)
             boat_key = client.key(constants.boat, int(boat_id))
             boat = client.get(key=boat_key)
             if boat is None:
                 return (ERROR_404, 404)
+            if not validate_boat_owner(boat, id):
+                return(json.dumps(ERROR_403), 403)
             for field in content:
                 boat.update({
                     field: content[field]
@@ -189,26 +184,29 @@ def edit_delete_boat(boat_id):
             boat["id"] = boat.key.id
             result = client.get(key=boat_key)
             result["id"] = result.key.id
-            return json.dumps(result, indent=4)
+            result['owner'] = boat['owner']
+            result['self'] = request.base_url
+            return (json.dumps(result, indent=5), 200)
         else:
             return (ERROR_406, 406)
     elif request.method == 'PUT':
         if request.is_json:
+            id = validate_jwt()
+            if not id:
+                return(json.dumps(ERROR_401), 401)
             content = request.get_json()
-            if not validate(content):
-                return(ERROR_400_INVALID, 400)
-            if not is_unique_name(content):
-                return(ERROR_400_DUP, 400)
-            if "id" in content:
-                return (ERROR_400_INVALID, 400)
             boat_key = client.key(constants.boat, int(boat_id))
             boat = client.get(key=boat_key)
+            res = {}
             if boat is None:
                 return (ERROR_404, 404)
+            if not validate_boat_owner(boat, id):
+                return(json.dumps(ERROR_403), 403)
             for field in content:
                 boat.update({
                     field: content[field]
                 })
+                res[field] = content[field]
             boat.update({
                 "name": content['name'],
                 "length": content["length"],
@@ -216,13 +214,10 @@ def edit_delete_boat(boat_id):
             })
             client.put(boat)
             boat["id"] = boat.key.id
-            url = request.base_url 
-            obj = client.get(key=boat_key)
-            obj["id"] = obj.key.id
-            res = Response(json.dumps(obj))
-            res.status_code = 303
-            res.headers['Location'] = url
-            return res
+            res['id'] = boat.key.id
+            res['self'] = request.base_url
+            res['owner'] = boat['owner']
+            return (json.dumps(res, indent=5), 200)
         else:
             return (ERROR_406, 406)
 
