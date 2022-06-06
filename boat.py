@@ -10,15 +10,15 @@ import google_auth_oauthlib.flow
 client = datastore.Client()
 boat_properties = ["name", "type", "length"]
 APP_JSON = 'application/json'
-ERROR_406 = {'ERROR_406': 'ERROR 406: application/json must be in Accept header'}
-ERROR_400_INVALID = {'ERROR_400': 'Error: Invalid request - include name, type, length'}
+ERROR_406 = {'ERROR_406': 'application/json must be in Accept header'}
+ERROR_400_INVALID = {'ERROR_400': 'Invalid request - include name, type, length'}
 ERROR_400_DUP = 'ERROR 400: Boat with this name already exists'
-ERROR_401 = {'ERROR_401': 'ERROR 401: The client has provided either no or invalid credentials. Check your JWT and login at /'}
-ERROR_404 = {'ERROR_404':'ERROR 404: No boat with this boat_id exists'}
-ERROR_403 = {'ERROR_403': 'ERROR 403: You are not permitted to perform this action'}
-ALREADY_ASSIGNED = {'ERROR_403': 'ERROR 403: Load is already on a boat'}
+ERROR_401 = {'ERROR_401': 'The client has provided either no or invalid credentials. Check your JWT and login at /'}
+ERROR_404 = {'ERROR_404':'No boat with this boat_id found'}
+ERROR_403 = {'ERROR_403': 'You are not permitted to perform this action'}
+ALREADY_ASSIGNED = {'ERROR_403': 'Load is already on a boat'}
 
-LOAD_ERROR_404 = {'ERROR_404':'ERROR 404: No load with this load_id found on boat'}
+LOAD_ERROR_404 = {'ERROR_404':'No load with this load_id found on boat'}
 
 
 CLIENT_ID = '268406931256-i8ctpko2kel510pn40riv3l89ccebhr3.apps.googleusercontent.com'
@@ -152,7 +152,8 @@ def get_post_boats():
             myRequest['owner'] = id
             myRequest['loads'] = []
             client.put(new_boat)
-            myRequest['id'] = str(new_boat.key.id)
+            myRequest['id'] = int(new_boat.key.id)
+            myRequest['self'] = request.base_url + "/" + str(new_boat.key.id)
             return(myRequest, 201)
         else:
             return(json.dumps(ERROR_406), 406)
@@ -284,7 +285,7 @@ def add_load_to_boat(boat_id, load_id):
             continue
         boatinfo[field] = boat[field]
     boatinfo['self'] = request.host_url + constants.boat + "/" + str(boat.key.id)
-    boatinfo['id'] = str(boat.key.id)
+    boatinfo['id'] = int(boat.key.id)
     if boat is not None and load is not None:
         if 'loads' in boat.keys():
             # check if load already on boat
@@ -295,7 +296,7 @@ def add_load_to_boat(boat_id, load_id):
                     for field in boat:
                         result[field] = boat[field]
                     result['self'] = request.host_url + constants.boat + "/" + str(boat.key.id)
-                    result['id'] = str(boat.key.id)
+                    result['id'] = int(boat.key.id)
                     return(json.dumps(result, indent=5), 200)
             boat['loads'].append({
                 'id': load.key.id,
@@ -313,7 +314,7 @@ def add_load_to_boat(boat_id, load_id):
     for field in boat:
         result[field] = boat[field]
     result['self'] = request.host_url + constants.boat + "/" + str(boat.key.id)
-    result['id'] = str(boat.key.id)
+    result['id'] = int(boat.key.id)
     return (json.dumps(result, indent=5), 200)
 
 @bp.route('/<boat_id>/loads/<load_id>', methods = ['DELETE'])

@@ -45,6 +45,7 @@ def user_exists(id):
             return True
     return False
 
+# Code credited to Google OAuth documentation.
 @app.route('/authorize')
 def authorize():
         # Create flow instance to manage the OAuth 2.0 Authorization Grant Flow steps.
@@ -71,8 +72,6 @@ def authorize():
 
 @app.route('/oauth2callback')
 def oauth2callback():
-    state = session['state']
-
     flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
       CLIENT_SECRETS_FILE, scopes=SCOPES)
     flow.redirect_uri = url_for('oauth2callback', _external=True)
@@ -81,8 +80,6 @@ def oauth2callback():
     
     flow.fetch_token(authorization_response=authorization_response)
     credentials = flow.credentials
-    print("credentials")
-    print(flow.credentials.to_json())
     session['credentials'] = credentials_to_dict(credentials)
     return redirect(url_for('user_page'))
 
@@ -130,5 +127,5 @@ def get_users():
 
 
 if __name__ == '__main__':
-    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+    # os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
     app.run(host='127.0.0.1', port=8000, debug=True)

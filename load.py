@@ -12,13 +12,13 @@ client = datastore.Client()
 
 bp = Blueprint('load', __name__, url_prefix='/loads')
 
-ERROR_406 = {'ERROR_406': 'ERROR 406: application/json must be in Accept header'}
-ERROR_400_INVALID = {'ERROR_400': 'Error: Invalid request - must include all parameters for load (volume and item)'}
+ERROR_406 = {'ERROR_406': 'application/json must be in Accept header'}
+ERROR_400_INVALID = {'ERROR_400': 'Invalid request - must include all parameters for load (volume and item)'}
 ERROR_400_DUP = 'ERROR 400: Load with this name already exists'
-ERROR_401 = {'ERROR_401': 'ERROR 401: The client has provided either no or invalid credentials. Check your JWT and login at /'}
-ERROR_404 = {'ERROR_404':'ERROR 404: No load with this load_id exists'}
-ERROR_403 = {'ERROR_403': 'ERROR 403: You are not permitted to perform this action'}
-ERROR_405 = {'ERROR_405': 'ERROR 405: This endpoint does not support this action'}
+ERROR_401 = {'ERROR_401': 'The client has provided either no or invalid credentials. Check your JWT and login at /'}
+ERROR_404 = {'ERROR_404':'No load with this load_id found'}
+ERROR_403 = {'ERROR_403': 'You are not permitted to perform this action'}
+ERROR_405 = {'ERROR_405': 'This endpoint does not support this action'}
 
 load_properties = ['volume', 'item']
 
@@ -76,7 +76,7 @@ def create_load():
             "load_creation_date": formatted_date
         }
         client.put(new_load)
-        myRequest['id'] = str(new_load.key.id)
+        myRequest['id'] = int(new_load.key.id)
         myRequest['self'] = request.base_url + "/" + str(new_load.key.id)
         return (json.dumps(myRequest, indent=5), 201)
     elif request.method == 'GET':
@@ -137,7 +137,7 @@ def edit_delete_load(load_id):
         client.put(load)
         for field in load:
             res[field] = load[field]
-        res['id'] = str(load.key.id)
+        res['id'] = int(load.key.id)
         res['self'] = request.base_url
         return(json.dumps(res, indent=5), 200)
     elif request.method == 'PUT':
@@ -156,6 +156,6 @@ def edit_delete_load(load_id):
         client.put(load)
         for field in load:
             res[field] = load[field]
-        res['id'] = str(load.key.id)
+        res['id'] = int(load.key.id)
         res['self'] = request.base_url
         return(json.dumps(res, indent=5), 200)
