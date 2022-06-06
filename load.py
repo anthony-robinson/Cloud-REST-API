@@ -6,7 +6,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as grequests
 from datetime import date
 import constants
-from boat import application_json_in_accept_header, query_datastore_boats, query_datastore_loads
+from boat import application_json_in_accept_header, query_datastore_boats, query_datastore_loads, get_total_items
 
 client = datastore.Client()
 
@@ -18,6 +18,7 @@ ERROR_400_DUP = 'ERROR 400: Load with this name already exists'
 ERROR_401 = {'ERROR_401': 'ERROR 401: The client has provided either no or invalid credentials. Check your JWT and login at /'}
 ERROR_404 = {'ERROR_404':'ERROR 404: No load with this load_id exists'}
 ERROR_403 = {'ERROR_403': 'ERROR 403: You are not permitted to perform this action'}
+ERROR_405 = {'ERROR_405': 'ERROR 405: This endpoint does not support this action'}
 
 load_properties = ['volume', 'item']
 
@@ -47,6 +48,7 @@ def get_loads(request):
     output = {"loads": results}
     if next_url:
         output['next'] = next_url
+    output['length'] = get_total_items(constants.load)
     return output
 
 @bp.route('', methods=['GET', 'POST'])
@@ -82,6 +84,10 @@ def create_load():
             return (json.dumps(ERROR_406), 406)
         res = get_loads(request)
         return (json.dumps(res, indent=5), 200)
+
+@bp.route('', methods=['PUT', 'PATCH', 'DELETE'])
+def methods_not_allowed():
+    return (json.dumps(ERROR_405), 405)
 
 
 @bp.route('/<load_id>', methods=['GET'])

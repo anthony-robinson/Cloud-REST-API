@@ -16,8 +16,9 @@ ERROR_400_DUP = 'ERROR 400: Boat with this name already exists'
 ERROR_401 = {'ERROR_401': 'ERROR 401: The client has provided either no or invalid credentials. Check your JWT and login at /'}
 ERROR_404 = {'ERROR_404':'ERROR 404: No boat with this boat_id exists'}
 ERROR_403 = {'ERROR_403': 'ERROR 403: You are not permitted to perform this action'}
+ALREADY_ASSIGNED = {'ERROR_403': 'ERROR 403: Load is already on a boat'}
 
-LOAD_ERROR_404 = {'ERROR_404':'ERROR 404: No load with this load_id exists'}
+LOAD_ERROR_404 = {'ERROR_404':'ERROR 404: No load with this load_id found on boat'}
 
 
 CLIENT_ID = '268406931256-i8ctpko2kel510pn40riv3l89ccebhr3.apps.googleusercontent.com'
@@ -80,6 +81,14 @@ def query_datastore_loads(load_id):
     load = client.get(key=load_key)
     return load
 
+def get_total_items(query_kind, owner_id=None):
+    if query_kind == constants.boat:
+        query = client.query(kind=query_kind)
+        query.add_filter("owner", "=", owner_id)
+        return len(list(query.fetch()))
+    query = client.query(kind=query_kind)
+    return len(list(query.fetch()))
+
 def get_user_boats(owner_id, request):
     if application_json_in_accept_header(request):
         query = client.query(kind=constants.boat)
@@ -100,6 +109,7 @@ def get_user_boats(owner_id, request):
         output = {"boats": results}
         if next_url:
             output['next'] = next_url
+        output['length'] = get_total_items(constants.boat, owner_id)
         return output
     else:
         return(json.dumps(ERROR_406), 406)
@@ -169,6 +179,7 @@ def edit_delete_boat(boat_id):
                             load.update({
                                 'carrier': None
                             })
+                            client.put(load)
             client.delete(boat_key)
             return ('',204)
         return (json.dumps(ERROR_404), 404)
@@ -265,6 +276,8 @@ def add_load_to_boat(boat_id, load_id):
     load = query_datastore_loads(load_id)
     if load is None:
         return (json.dumps(LOAD_ERROR_404), 404)
+    if 'carrier' in load and load['carrier'] is not None:
+        return (json.dumps(ALREADY_ASSIGNED), 403)
     boatinfo = {}
     for field in boat:
         if field == 'loads':
@@ -322,9 +335,12 @@ def remove_load_from_boat(boat_id, load_id):
             for item in boat['loads']:
                 if item['id'] == load.key.id:
                     boat['loads'].remove(item)
+                    load['carrier'] = None
                     client.put(boat)
+                    client.put(load)
                     return('', 204)
-    return (json.dumps(ERROR_404, indent=5), 404)
+    return (json.dumps(ERROR_404), 404)
+        
     
 
     
