@@ -243,8 +243,11 @@ def get_boat(boat_id):
     boat = client.get(key=boat_key)
     if not validate_boat_owner(boat, id):
         return(json.dumps(ERROR_403), 403)
+    res = {}
     if boat is not None:
-        return(json.dumps(boat), 200)
+        res = boat
+        res['id'] = boat.key.id
+        return(json.dumps(res), 200)
     return (ERROR_404, 404)
 
 @bp.route('/<boat_id>/loads/<load_id>', methods = ['PUT'])
@@ -299,6 +302,29 @@ def add_load_to_boat(boat_id, load_id):
     result['self'] = request.host_url + constants.boat + "/" + str(boat.key.id)
     result['id'] = str(boat.key.id)
     return (json.dumps(result, indent=5), 200)
+
+@bp.route('/<boat_id>/loads/<load_id>', methods = ['DELETE'])
+def remove_load_from_boat(boat_id, load_id):
+    id = validate_jwt()
+    if not id:
+        return(json.dumps(ERROR_401), 401)
+    boat = query_datastore_boats(boat_id)
+    if boat is None:
+        return (json.dumps(ERROR_404), 404)
+    if not validate_boat_owner(boat, id):
+        return(json.dumps(ERROR_403), 403)
+    load = query_datastore_loads(load_id)
+    if load is None:
+        return (json.dumps(LOAD_ERROR_404), 404)
+    if boat is not None and load is not None:
+        if 'loads' in boat.keys():
+            # check if load already on boat
+            for item in boat['loads']:
+                if item['id'] == load.key.id:
+                    boat['loads'].remove(item)
+                    client.put(boat)
+                    return('', 204)
+    return (json.dumps(ERROR_404, indent=5), 404)
     
 
     

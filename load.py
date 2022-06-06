@@ -6,14 +6,14 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as grequests
 from datetime import date
 import constants
-from boat import application_json_in_accept_header
+from boat import application_json_in_accept_header, query_datastore_boats, query_datastore_loads
 
 client = datastore.Client()
 
 bp = Blueprint('load', __name__, url_prefix='/loads')
 
 ERROR_406 = {'ERROR_406': 'ERROR 406: application/json must be in Accept header'}
-ERROR_400_INVALID = {'ERROR_400': 'Error: Invalid request - include name, type, length'}
+ERROR_400_INVALID = {'ERROR_400': 'Error: Invalid request - must include all parameters for load (volume and item)'}
 ERROR_400_DUP = 'ERROR 400: Load with this name already exists'
 ERROR_401 = {'ERROR_401': 'ERROR 401: The client has provided either no or invalid credentials. Check your JWT and login at /'}
 ERROR_404 = {'ERROR_404':'ERROR 404: No load with this load_id exists'}
@@ -21,7 +21,7 @@ ERROR_403 = {'ERROR_403': 'ERROR 403: You are not permitted to perform this acti
 
 load_properties = ['volume', 'item']
 
-# validates the load POST request
+# validates the load POST request and PUT request
 def validate_load_req(content):
     if any(prop not in content for prop in load_properties):
         return False
@@ -117,3 +117,39 @@ def edit_delete_load(load_id):
             client.delete(load_key)
             return ('',204)
         return (json.dumps(ERROR_404), 404)
+    elif request.method == 'PATCH':
+        if not application_json_in_accept_header(request):
+            return(json.dumps(ERROR_406), 406)
+        load = query_datastore_loads(load_id)
+        if load is None:
+            return (json.dumps(ERROR_404), 404)
+        content = request.get_json()
+        res = {}
+        for field in content:
+            load[field] = content[field]
+            res[field] = content[field]
+        client.put(load)
+        for field in load:
+            res[field] = load[field]
+        res['id'] = str(load.key.id)
+        res['self'] = request.base_url
+        return(json.dumps(res, indent=5), 200)
+    elif request.method == 'PUT':
+        if not application_json_in_accept_header(request):
+            return(json.dumps(ERROR_406), 406)
+        load = query_datastore_loads(load_id)
+        if load is None:
+            return (json.dumps(ERROR_404), 404)
+        content = request.get_json()
+        if not validate_load_req(content):
+            return (json.dumps(ERROR_400_INVALID), 400)
+        res = {}
+        for field in content:
+            load[field] = content[field]
+            res[field] = content[field]
+        client.put(load)
+        for field in load:
+            res[field] = load[field]
+        res['id'] = str(load.key.id)
+        res['self'] = request.base_url
+        return(json.dumps(res, indent=5), 200)
