@@ -10,12 +10,14 @@ import google_auth_oauthlib.flow
 client = datastore.Client()
 boat_properties = ["name", "type", "length"]
 APP_JSON = 'application/json'
-ERROR_406 = 'ERROR 406: Mimetype not supported by the server'
-ERROR_400_INVALID = 'Error: Invalid request - include name, type, length'
+ERROR_406 = {'ERROR_406': 'ERROR 406: application/json must be in Accept header'}
+ERROR_400_INVALID = {'ERROR_400': 'Error: Invalid request - include name, type, length'}
 ERROR_400_DUP = 'ERROR 400: Boat with this name already exists'
-ERROR_401 = 'ERROR 401: The client has provided either no or invalid credentials. Check your JWT and login at /'
-ERROR_404 = 'ERROR 404: No boat with this boat_id exists'
-ERROR_403 = 'ERROR 403: You are not permitted to perform this action'
+ERROR_401 = {'ERROR_401': 'ERROR 401: The client has provided either no or invalid credentials. Check your JWT and login at /'}
+ERROR_404 = {'ERROR_404':'ERROR 404: No boat with this boat_id exists'}
+ERROR_403 = {'ERROR_403': 'ERROR 403: You are not permitted to perform this action'}
+
+LOAD_ERROR_404 = {'ERROR_404':'ERROR 404: No load with this load_id exists'}
 
 
 CLIENT_ID = '268406931256-i8ctpko2kel510pn40riv3l89ccebhr3.apps.googleusercontent.com'
@@ -57,35 +59,50 @@ def validate_jwt():
     except ValueError:
         return False
 
+def application_json_in_accept_header(request):
+    if 'Accept' in request.headers and request.headers['Accept'] == 'application/json':
+        return True
+    return False
+
 # function to check if boat's owner and id match else 403 error
 def validate_boat_owner(boat, id):
     if boat is not None and boat['owner'] != id:
         return False
     return True
 
-    
+def query_datastore_boats(boat_id):
+    boat_key = client.key(constants.boat, int(boat_id))
+    boat = client.get(key=boat_key)
+    return boat
+
+def query_datastore_loads(load_id):
+    load_key = client.key(constants.load, int(load_id))
+    load = client.get(key=load_key)
+    return load
 
 def get_user_boats(owner_id, request):
-    query = client.query(kind=constants.boat)
+    if application_json_in_accept_header(request):
+        query = client.query(kind=constants.boat)
+        qlimit = int(request.args.get('limit', '5'))
+        qoffset = int(request.args.get('offset', '0'))
+        query.add_filter("owner", "=", owner_id)
+        boat_iterator = query.fetch(limit=qlimit, offset=qoffset)
+        pages = boat_iterator.pages
+        next_url = None
+        results = list(next(pages))
+        if boat_iterator.next_page_token:
+            next_offset = qoffset + qlimit
+            next_url = request.base_url + "?limit=" + str(qlimit) + "&offset=" + str(next_offset)
 
-    qlimit = int(request.args.get('limit', '5'))
-    qoffset = int(request.args.get('offset', '0'))
-    query.add_filter("owner", "=", owner_id)
-    boat_iterator = query.fetch(limit=qlimit, offset=qoffset)
-    pages = boat_iterator.pages
-    next_url = None
-    results = list(next(pages))
-    if boat_iterator.next_page_token:
-        next_offset = qoffset + qlimit
-        next_url = request.base_url + "?limit=" + str(qlimit) + "&offset=" + str(next_offset)
-
-    for boat in results:
-        boat['id'] = boat.key.id
-        boat['self'] = request.base_url + "/" + str(boat.key.id)
-    output = {"boats": results}
-    if next_url:
-        output['next'] = next_url
-    return output
+        for boat in results:
+            boat['id'] = boat.key.id
+            boat['self'] = request.base_url + "/" + str(boat.key.id)
+        output = {"boats": results}
+        if next_url:
+            output['next'] = next_url
+        return output
+    else:
+        return(json.dumps(ERROR_406), 406)
 
 def is_boat_property(prop):
     return prop in boat_properties
@@ -94,6 +111,8 @@ def is_boat_property(prop):
 @bp.route('', methods=['GET', 'POST'])
 def get_post_boats():
     if request.method == 'GET':
+        if not application_json_in_accept_header(request):
+            return(json.dumps(ERROR_406), 406)
         id = validate_jwt()
         if id:
             res = get_user_boats(id, request)
@@ -102,28 +121,31 @@ def get_post_boats():
             return (json.dumps(ERROR_401), 401)
     #only a user should be able to create boats -- protected endpoint
     elif request.method == 'POST':
-        id = validate_jwt()
-        if not id:
-            return(json.dumps(ERROR_401), 401)
-        content = request.get_json()
-        if not validate(content):
-            return (json.dumps(ERROR_400_INVALID), 400)
-        myRequest = {}
-        new_boat = datastore.entity.Entity(key=client.key(constants.boat))
-        for field in content:
+        if 'Accept' in request.headers and request.headers['Accept'] == 'application/json':
+            id = validate_jwt()
+            if not id:
+                return(json.dumps(ERROR_401), 401)
+            content = request.get_json()
+            if not validate(content):
+                return (json.dumps(ERROR_400_INVALID), 400)
+            myRequest = {}
+            new_boat = datastore.entity.Entity(key=client.key(constants.boat))
+            for field in content:
+                new_boat.update({
+                    field: content[field]
+                })
+                myRequest[field] = content[field]
             new_boat.update({
-                field: content[field]
+                'owner': id,
+                'loads': []
             })
-            myRequest[field] = content[field]
-        new_boat.update({
-            'owner': id,
-            'loads': []
-        })
-        myRequest['owner'] = id
-        myRequest['loads'] = []
-        client.put(new_boat)
-        myRequest['id'] = str(new_boat.key.id)
-        return(myRequest, 201)
+            myRequest['owner'] = id
+            myRequest['loads'] = []
+            client.put(new_boat)
+            myRequest['id'] = str(new_boat.key.id)
+            return(myRequest, 201)
+        else:
+            return(json.dumps(ERROR_406), 406)
 
 @bp.route('/<boat_id>', methods=['DELETE', 'PATCH', 'PUT'])
 def edit_delete_boat(boat_id):
@@ -137,11 +159,21 @@ def edit_delete_boat(boat_id):
         if boat is not None and boat['owner'] != id:
             return(json.dumps(ERROR_403), 403)
         if boat is not None:
+            #unload all loads on boat
+            if 'loads' in boat and len(boat['loads']):
+                for item in boat['loads']:
+                    if 'id' in item:
+                        load_key = client.key(constants.load, int(item['id']))
+                        load = client.get(key=load_key)
+                        if load is not None:
+                            load.update({
+                                'carrier': None
+                            })
             client.delete(boat_key)
             return ('',204)
         return (json.dumps(ERROR_404), 404)
     elif request.method == 'PATCH':
-        if request.is_json:
+        if application_json_in_accept_header(request):
             id = validate_jwt()
             if not id:
                 return(json.dumps(ERROR_401), 401)
@@ -164,9 +196,9 @@ def edit_delete_boat(boat_id):
             result['self'] = request.base_url
             return (json.dumps(result, indent=5), 200)
         else:
-            return (ERROR_406, 406)
+            return (json.dumps(ERROR_406), 406)
     elif request.method == 'PUT':
-        if request.is_json:
+        if application_json_in_accept_header(request):
             id = validate_jwt()
             if not id:
                 return(json.dumps(ERROR_401), 401)
@@ -195,13 +227,15 @@ def edit_delete_boat(boat_id):
             res['owner'] = boat['owner']
             return (json.dumps(res, indent=5), 200)
         else:
-            return (ERROR_406, 406)
+            return (json.dumps(ERROR_406), 406)
 
 
 # view a boat 
 # protected - only can view boat if this boat_id is in the users boats.
 @bp.route('/<boat_id>', methods=['GET'])
 def get_boat(boat_id):
+    if not application_json_in_accept_header(request):
+        return(json.dumps(ERROR_406), 406)
     id = validate_jwt()
     if not id:
         return(json.dumps(ERROR_401), 401)
@@ -212,5 +246,59 @@ def get_boat(boat_id):
     if boat is not None:
         return(json.dumps(boat), 200)
     return (ERROR_404, 404)
+
+@bp.route('/<boat_id>/loads/<load_id>', methods = ['PUT'])
+def add_load_to_boat(boat_id, load_id):
+    if not application_json_in_accept_header(request):
+        return (json.dumps(ERROR_406), 406)
+    id = validate_jwt()
+    if not id:
+        return(json.dumps(ERROR_401), 401)
+    boat = query_datastore_boats(boat_id)
+    if boat is None:
+        return (json.dumps(ERROR_404), 404)
+    if not validate_boat_owner(boat, id):
+        return(json.dumps(ERROR_403), 403)
+    load = query_datastore_loads(load_id)
+    if load is None:
+        return (json.dumps(LOAD_ERROR_404), 404)
+    boatinfo = {}
+    for field in boat:
+        if field == 'loads':
+            continue
+        boatinfo[field] = boat[field]
+    boatinfo['self'] = request.host_url + constants.boat + "/" + str(boat.key.id)
+    boatinfo['id'] = str(boat.key.id)
+    if boat is not None and load is not None:
+        if 'loads' in boat.keys():
+            # check if load already on boat
+            for item in boat['loads']:
+                if item['id'] == load.key.id:
+                    # load has already been added
+                    result = {}
+                    for field in boat:
+                        result[field] = boat[field]
+                    result['self'] = request.host_url + constants.boat + "/" + str(boat.key.id)
+                    result['id'] = str(boat.key.id)
+                    return(json.dumps(result, indent=5), 200)
+            boat['loads'].append({
+                'id': load.key.id,
+                'self': request.host_url + constants.load + "/" + str(load.key.id)
+            })
+        else:
+            boat['loads'] =  [{
+                'id': load.key.id,
+                'self': request.host_url + constants.load + "/" + str(load.key.id)
+            }]
+    client.put(boat)
+    load['carrier'] = boatinfo
+    client.put(load)
+    result = {}
+    for field in boat:
+        result[field] = boat[field]
+    result['self'] = request.host_url + constants.boat + "/" + str(boat.key.id)
+    result['id'] = str(boat.key.id)
+    return (json.dumps(result, indent=5), 200)
+    
 
     
