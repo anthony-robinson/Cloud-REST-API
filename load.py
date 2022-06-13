@@ -6,7 +6,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as grequests
 from datetime import date
 import constants
-from boat import application_json_in_accept_header, query_datastore_boats, query_datastore_loads, get_total_items
+from service import application_json_in_accept_header, query_datastore_boats, query_datastore_loads, get_total_items
 
 client = datastore.Client()
 
